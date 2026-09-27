@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>peiyu</title>
+<link rel="icon" type="image/png" href="assets/01-loading/background01.png">
+<meta property="og:title" content="peiyu">
+<meta property="og:image" content="https://ppyu3010.github.io/peiyu-site/assets/01-loading/background01.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+TC:wght@500;900&family=Noto+Serif+TC:wght@200;700&display=swap" rel="stylesheet">
 <style>
@@ -21,9 +25,16 @@
   #intro.gone { opacity:0; pointer-events:none; }
   #introBg { position:absolute; inset:0; background:center / cover no-repeat; opacity:0; transition:opacity .6s; }
   #introBg.ready { opacity:1; }
+  #intro-deco { display:none; position:absolute; left:4%; top:80%; width:26vw; opacity:0; transition:opacity .8s .3s; pointer-events:none; }
+  #intro-deco.ready { opacity:1; }
   @media (min-aspect-ratio:6/5) and (max-aspect-ratio:11/5) { #introBg { background-size:100% 100%; } }
-  @media (max-aspect-ratio:4/5) { #introBg { background-size:100% 100%; } #reader { left:56%; top:60%; } }
   #reader { position:absolute; left:80%; top:47%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; background:none; border:0; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  /* 直式手機：底圖右側是一整條空白，門禁機搬到那裡、靠左對齊，機器就落在文字圖樣的左上方 */
+  @media (max-aspect-ratio:4/5) {
+    #introBg { background-size:100% 100%; }
+    #reader { left:60%; top:9%; transform:none; align-items:flex-start; }
+    #intro-deco { display:block; }
+  }
   #reader:disabled { cursor:default; }
   .stack { position:relative; }
   .stack img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; opacity:0; }
@@ -54,7 +65,7 @@
   #wall.ready #deco { opacity:1; }
   .ttl { position:absolute; left:var(--tx); top:var(--ty); width:var(--tw); z-index:3; pointer-events:none; opacity:0; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(calc(.88),calc(.88 * var(--sy,1))); transition:opacity .18s, transform .35s cubic-bezier(.3,1.6,.5,1); }
   .ttl.on { opacity:1; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(1,var(--sy,1)); }
-  .m-cap { display:none; }
+  .m-title-img { display:none; }
 
   /* ===== 手機（窄螢幕）首頁：改成直式，四個圖樣由上往下滑，一次看一個 ===== */
   html.narrow, body.narrow { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
@@ -65,7 +76,7 @@
   body.narrow #wall.ready .motif { opacity:1; }
   body.narrow .motif .inner { animation:none; width:100%; }
   body.narrow .ttl { display:none; }
-  body.narrow .m-cap { display:block; margin-top:2.4vh; font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:700; font-size:clamp(17px,5vw,26px); text-align:center; color:#1a1a1a; }
+  body.narrow .m-title-img { display:block; width:68%; height:auto; margin-top:2.2vh; user-select:none; -webkit-user-drag:none; }
 
   /* 沒有你的圖時的暫代形狀 */
   .ph { pointer-events:none; aspect-ratio:1; display:grid; place-items:center; text-align:center; padding:12%; border:4px solid var(--ink); box-shadow:8px 8px 0 var(--ink);
@@ -255,6 +266,7 @@
 
 <div id="intro">
   <div id="introBg"></div>
+  <img id="intro-deco" src="assets/02-wall/deco/deco-01.png" alt="">
   <button id="reader" aria-label="刷卡開始">
     <div class="stack" id="machine">
       <img src="assets/01-loading/call-button01.png" alt="" class="on">
@@ -324,7 +336,7 @@ document.querySelectorAll("#intro img").forEach(im => { const p = new Image(); p
   const portrait = innerHeight > innerWidth;
   const n = 1 + Math.floor(Math.random()*3);
   const url = `assets/01-loading/background0${n}${portrait ? "-straight" : ""}.png`;
-  const im = new Image(); im.onload = im.onerror = () => { $("introBg").style.backgroundImage = `url(${url})`; $("introBg").classList.add("ready"); }; im.src = url;
+  const im = new Image(); im.onload = im.onerror = () => { $("introBg").style.backgroundImage = `url(${url})`; $("introBg").classList.add("ready"); $("intro-deco").classList.add("ready"); }; im.src = url;
   if(portrait){
     $("labels").children[0].src = "assets/01-loading/label-press-straight.png";
     $("labels").children[1].src = "assets/01-loading/label-connecting-straight.png";
@@ -376,7 +388,7 @@ AREAS.forEach((a, i) => {
   img.onload = () => { m.ratio = img.naturalHeight / img.naturalWidth; m.s = sampler(img); };
   img.onerror = () => { m.ph = true; const ph = document.createElement("div"); ph.className = "ph"; ph.style.cssText = `--c:${a.c}; --r:${a.shape}`; ph.textContent = a.title; img.replaceWith(ph); };
   img.src = a.img; inner.appendChild(img);
-  const cap = document.createElement("span"); cap.className = "m-cap"; cap.textContent = a.title; b.appendChild(cap);   // 手機：標題常駐顯示在圖樣下方，不需要滑過
+  if(a.titleImg){ const mt = new Image(); mt.className = "m-title-img"; mt.alt = a.title; mt.draggable = false; mt.src = a.titleImg; b.appendChild(mt); }   // 手機：標題圖檔常駐顯示在圖樣下方，不需要滑過
   b.addEventListener("click", e => { if(document.body.classList.contains("narrow")){ e.stopPropagation(); openArea(a, b); } });
   if(a.titleImg){ const t = new Image(); t.className = "ttl"; t.alt = ""; t.draggable = false; t.src = a.titleImg; t.onload = () => { m.title = t; }; t.style.cssText = `--tx:${a.tx}%; --ty:${a.ty}%; --tw:${a.tw}%; --tr:${a.tr||0}deg; --sy:${a.sy||1}`; stage.appendChild(t); m.titleEl = t; }
   b.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openArea(a, b); } };
