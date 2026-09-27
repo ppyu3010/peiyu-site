@@ -63,7 +63,7 @@
   #wall.ready #deco { opacity:1; }
   .ttl { position:absolute; left:var(--tx); top:var(--ty); width:var(--tw); z-index:3; pointer-events:none; opacity:0; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(calc(.88),calc(.88 * var(--sy,1))); transition:opacity .18s, transform .35s cubic-bezier(.3,1.6,.5,1); }
   .ttl.on { opacity:1; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(1,var(--sy,1)); }
-  .m-title-img { display:none; }
+  .motif .m-title-img { display:none; }   /* 要贏過上面 .motif img 的優先權，平常（沒有滑過時）先藏起來 */
 
   /* ===== 手機（窄螢幕）首頁：改成直式，四個圖樣由上往下滑，一次看一個 ===== */
   html.narrow, body.narrow { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
