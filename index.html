@@ -25,15 +25,12 @@
   #intro.gone { opacity:0; pointer-events:none; }
   #introBg { position:absolute; inset:0; background:center / cover no-repeat; opacity:0; transition:opacity .6s; }
   #introBg.ready { opacity:1; }
-  #intro-deco { display:none; position:absolute; left:4%; top:80%; width:26vw; opacity:0; transition:opacity .8s .3s; pointer-events:none; }
-  #intro-deco.ready { opacity:1; }
   @media (min-aspect-ratio:6/5) and (max-aspect-ratio:11/5) { #introBg { background-size:100% 100%; } }
   #reader { position:absolute; left:80%; top:47%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; background:none; border:0; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
   /* 直式手機：底圖右側是一整條空白，門禁機搬到那裡、靠左對齊，機器就落在文字圖樣的左上方 */
   @media (max-aspect-ratio:4/5) {
     #introBg { background-size:100% 100%; }
-    #reader { left:60%; top:9%; transform:none; align-items:flex-start; }
-    #intro-deco { display:block; }
+    #reader { left:50%; top:48%; transform:none; align-items:flex-start; }
   }
   #reader:disabled { cursor:default; }
   .stack { position:relative; }
@@ -60,6 +57,7 @@
   .motif:focus-visible { outline:3px solid var(--ink); outline-offset:8px; }
   @keyframes float { 50% { transform:translateY(-7px); } }
   #deco { position:absolute; left:0; top:0; z-index:0; pointer-events:none; will-change:transform; opacity:0; transition:opacity 1s .8s; }
+  body.narrow #deco { position:fixed; z-index:1; }   /* 手機頁面會捲動，用 fixed 讓草皮圓一直留在畫面上彈，不會被捲走 */
   #rgb { position:fixed; inset:0; z-index:60; pointer-events:none; opacity:0; border:6px solid var(--g1); box-shadow:inset 0 0 38px 8px var(--g2); transition:border-color 1.6s ease, box-shadow 1.6s ease, opacity .8s ease; }
   #rgb.on { opacity:1; }
   #wall.ready #deco { opacity:1; }
@@ -71,7 +69,6 @@
   html.narrow, body.narrow { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
   body.narrow #wall { position:static; height:auto; min-height:100vh; overflow:visible; }
   body.narrow #stage { position:static; left:auto; top:auto; transform:none; width:100% !important; height:auto !important; display:flex; flex-direction:column; align-items:center; padding:9vh 0 55vh; }
-  body.narrow #deco { display:none; }
   body.narrow .motif { position:static; transform:none !important; width:62vw !important; pointer-events:auto; opacity:0; order:var(--mo); margin:9vh 0; display:flex; flex-direction:column; align-items:center; transition:opacity .6s; }
   body.narrow #wall.ready .motif { opacity:1; }
   body.narrow .motif .inner { animation:none; width:100%; }
@@ -213,7 +210,7 @@
   body.narrow .pstage { padding-top:25vh; padding-bottom:50vh; }   /* padding（不是 margin）避免子層的 margin-top 跟 pstage 邊界重疊塌陷，導致蓋到上面的大標題 */
   body.narrow .pbody { position:static; left:auto; right:auto; top:auto; width:88vw; margin:0 auto; }
   body.narrow .ptitle, body.narrow .ptitle-fb { top:4vh !important; left:6vw !important; width:56vw !important; }
-  body.narrow .pback { top:4vh !important; left:auto !important; right:5vw !important; width:15vw !important; }
+  body.narrow .pback { top:4vh !important; left:auto !important; right:5vw !important; width:37.5vw !important; }
 
   /* about */
   body.narrow .about-text { position:static; width:88vw; margin:0 auto; }
@@ -266,7 +263,6 @@
 
 <div id="intro">
   <div id="introBg"></div>
-  <img id="intro-deco" src="assets/02-wall/deco/deco-01.png" alt="">
   <button id="reader" aria-label="刷卡開始">
     <div class="stack" id="machine">
       <img src="assets/01-loading/call-button01.png" alt="" class="on">
@@ -336,7 +332,7 @@ document.querySelectorAll("#intro img").forEach(im => { const p = new Image(); p
   const portrait = innerHeight > innerWidth;
   const n = 1 + Math.floor(Math.random()*3);
   const url = `assets/01-loading/background0${n}${portrait ? "-straight" : ""}.png`;
-  const im = new Image(); im.onload = im.onerror = () => { $("introBg").style.backgroundImage = `url(${url})`; $("introBg").classList.add("ready"); $("intro-deco").classList.add("ready"); }; im.src = url;
+  const im = new Image(); im.onload = im.onerror = () => { $("introBg").style.backgroundImage = `url(${url})`; $("introBg").classList.add("ready"); }; im.src = url;
   if(portrait){
     $("labels").children[0].src = "assets/01-loading/label-press-straight.png";
     $("labels").children[1].src = "assets/01-loading/label-connecting-straight.png";
