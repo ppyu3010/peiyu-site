@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>peiyu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Noto+Sans+TC:wght@500;900&family=Noto+Serif+TC:wght@200;700&display=swap" rel="stylesheet">
+<style>
+  /* 展開頁字型：源流明體 EL（內文）／B（篇名）。本機有安裝就直接用；要給所有訪客看到，需把字型檔放進 assets/fonts/（見 CHECKLIST）。找不到時退回外觀相近的 Noto Serif TC。 */
+  @font-face { font-family:"GenRyuMinTW"; font-weight:200; src:local("GenRyuMinTW-EL"), local("源流明體 EL"), url("assets/fonts/GenRyuMinTW-EL.woff2") format("woff2"); }
+  @font-face { font-family:"GenRyuMinTW"; font-weight:700; src:local("GenRyuMinTW-B"), local("源流明體 B"), url("assets/fonts/GenRyuMinTW-B.woff2") format("woff2"); }
+  :root { --yellow:#F5FF3D; --pink:#FF5CCB; --red:#FF3A1D; --blue:#2E5BFF; --green:#35C24A; --paper:#FFFFFF; --ink:#141414;
+          --display:"Dela Gothic One","PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif; --body:"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif; }
+  * { box-sizing:border-box; margin:0; }
+  html,body { height:100%; background:var(--paper); color:var(--ink); font-family:var(--body); font-weight:500; overflow:hidden; }
+  button { font:inherit; color:inherit; }
+
+  /* ===== 載入畫面：刷門禁卡 ===== */
+  #intro { position:fixed; inset:0; z-index:30; background:#fff; transition:opacity .9s; }
+  #intro.gone { opacity:0; pointer-events:none; }
+  #introBg { position:absolute; inset:0; background:center / cover no-repeat; opacity:0; transition:opacity .6s; }
+  #introBg.ready { opacity:1; }
+  @media (min-aspect-ratio:6/5) and (max-aspect-ratio:11/5) { #introBg { background-size:100% 100%; } }
+  @media (max-aspect-ratio:4/5) { #introBg { background-size:100% 100%; } #reader { left:56%; top:60%; } }
+  #reader { position:absolute; left:80%; top:47%; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; background:none; border:0; padding:0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  #reader:disabled { cursor:default; }
+  .stack { position:relative; }
+  .stack img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; opacity:0; }
+  .stack img + img { position:absolute; inset:0; }
+  .stack img.on { opacity:1; }
+  #machine { width:clamp(64px, 6.6vw, 140px); }
+  #labels { width:clamp(150px, 15.4vw, 300px); margin-top:-.4vw; }
+  #labels img { transition:opacity .25s; }
+  #reader.swipe #machine { animation:swipe .28s ease-out; }
+  @keyframes swipe { 0% { transform:translateY(0); } 35% { transform:translateY(5px) scale(.985); } 100% { transform:translateY(0); } }
+  #reader.pending #labels { animation:pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity:.35; } }
+
+  /* ===== 平面牆面 ===== */
+  #wall { position:fixed; inset:0; z-index:1; background:#fff; overflow:hidden; }
+  #stage { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:1; }
+  .motif { position:absolute; transform:translate(-50%,-50%) rotate(var(--rot,0deg)); width:var(--w); pointer-events:none; opacity:0; transition:opacity .7s var(--delay,0s); z-index:2; }
+  #wall.ready .motif { opacity:1; }
+  .motif .inner { position:relative; animation:float 6s ease-in-out infinite var(--delay,0s); }
+  .motif img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
+  .motif img.hv { position:absolute; inset:0; opacity:0; transition:opacity .12s; }
+  .motif.hot img.hv { opacity:1; }
+  .motif:focus-visible { outline:3px solid var(--ink); outline-offset:8px; }
+  @keyframes float { 50% { transform:translateY(-7px); } }
+  #deco { position:absolute; left:0; top:0; z-index:0; pointer-events:none; will-change:transform; opacity:0; transition:opacity 1s .8s; }
+  #rgb { position:fixed; inset:0; z-index:60; pointer-events:none; opacity:0; border:6px solid var(--g1); box-shadow:inset 0 0 38px 8px var(--g2); transition:border-color 1.6s ease, box-shadow 1.6s ease, opacity .8s ease; }
+  #rgb.on { opacity:1; }
+  #wall.ready #deco { opacity:1; }
+  .ttl { position:absolute; left:var(--tx); top:var(--ty); width:var(--tw); z-index:3; pointer-events:none; opacity:0; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(calc(.88),calc(.88 * var(--sy,1))); transition:opacity .18s, transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .ttl.on { opacity:1; transform:translate(-50%,-50%) rotate(var(--tr,0deg)) scale(1,var(--sy,1)); }
+  .m-cap { display:none; }
+
+  /* ===== 手機（窄螢幕）首頁：改成直式，四個圖樣由上往下滑，一次看一個 ===== */
+  html.narrow, body.narrow { height:auto; min-height:100%; overflow-y:auto; overflow-x:hidden; }
+  body.narrow #wall { position:static; height:auto; min-height:100vh; overflow:visible; }
+  body.narrow #stage { position:static; left:auto; top:auto; transform:none; width:100% !important; height:auto !important; display:flex; flex-direction:column; align-items:center; padding:9vh 0 55vh; }
+  body.narrow #deco { display:none; }
+  body.narrow .motif { position:static; transform:none !important; width:62vw !important; pointer-events:auto; opacity:0; order:var(--mo); margin:9vh 0; display:flex; flex-direction:column; align-items:center; transition:opacity .6s; }
+  body.narrow #wall.ready .motif { opacity:1; }
+  body.narrow .motif .inner { animation:none; width:100%; }
+  body.narrow .ttl { display:none; }
+  body.narrow .m-cap { display:block; margin-top:2.4vh; font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:700; font-size:clamp(17px,5vw,26px); text-align:center; color:#1a1a1a; }
+
+  /* 沒有你的圖時的暫代形狀 */
+  .ph { pointer-events:none; aspect-ratio:1; display:grid; place-items:center; text-align:center; padding:12%; border:4px solid var(--ink); box-shadow:8px 8px 0 var(--ink);
+        font-family:var(--display); font-size:clamp(14px,1.8vw,26px); line-height:1.15; background:var(--c); border-radius:var(--r); }
+  #wall.dim { pointer-events:none; }
+
+  /* ===== 展開的區域 ===== */
+  #panel { position:fixed; z-index:10; display:none; overflow:hidden; background:var(--c,var(--yellow)); border:0 solid var(--ink);
+           transition:left .6s cubic-bezier(.7,0,.2,1), top .6s cubic-bezier(.7,0,.2,1), width .6s cubic-bezier(.7,0,.2,1), height .6s cubic-bezier(.7,0,.2,1), border-radius .6s, background-color .55s ease; }
+  #panel.white { background:#fff; }
+  #panel .bgimg { position:absolute; inset:0; background:center / cover no-repeat; pointer-events:none; }
+  #scroller { position:absolute; inset:0; overflow-y:auto; overflow-x:hidden; opacity:0; transition:opacity .35s; --u:10px; --sw:1000px; --sh:629px; }
+  #panel.show #scroller { opacity:1; }
+  .bar { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:clamp(18px,4vh,40px); }
+  .tag { display:inline-block; font-family:var(--display); font-size:12px; letter-spacing:.12em; background:var(--paper); border:3px solid var(--ink); padding:6px 12px; box-shadow:4px 4px 0 var(--ink); }
+  .btn { cursor:pointer; font-weight:900; letter-spacing:.1em; font-size:14px; padding:10px 18px; border:4px solid var(--ink); background:var(--paper); box-shadow:5px 5px 0 var(--ink); transition:.12s; }
+  .btn:hover { transform:translate(3px,3px); box-shadow:2px 2px 0 var(--ink); background:var(--yellow); }
+  h1.title { font-family:var(--display); font-weight:400; font-size:clamp(38px,9vw,130px); line-height:.95; letter-spacing:-.01em; word-break:break-word; margin-bottom:.35em;
+             color:var(--paper); -webkit-text-stroke:3px var(--ink); text-shadow:6px 6px 0 var(--ink); transform:rotate(-1.5deg); transform-origin:left bottom; }
+  .sub { display:inline-block; background:var(--ink); color:var(--yellow); font-weight:900; padding:5px 14px; letter-spacing:.08em; margin-bottom:26px; transform:rotate(1deg); }
+  .sticker { background:var(--paper); border:3px solid var(--ink); box-shadow:6px 6px 0 var(--ink); padding:18px 22px; line-height:1.85; font-weight:500; max-width:62ch; }
+  .sticker p + p, .prose p + p { margin-top:1em; } .sticker h3, .prose h3 { font-family:var(--display); font-weight:400; margin:1.2em 0 .4em; font-size:20px; }
+  .prose { line-height:1.9; max-width:66ch; } .prose img, .stack-imgs img { display:block; max-width:100%; height:auto; margin:1.4em 0; border:3px solid var(--ink); background:#fff; }
+  .stack-imgs { margin-top:30px; max-width:1100px; }
+  .cols { display:grid; grid-template-columns:minmax(0,320px) 1fr; gap:clamp(20px,4vw,56px); align-items:start; }
+  @media (max-width:760px){ .cols { grid-template-columns:1fr; } }
+  .portrait { width:100%; aspect-ratio:3/4; border:4px solid var(--ink); box-shadow:8px 8px 0 var(--ink); background:var(--paper) center / cover; display:grid; place-items:center; text-align:center; padding:20px; font-weight:900; }
+  .links { display:flex; flex-wrap:wrap; gap:12px; margin-top:26px; }
+  .links a { text-decoration:none; color:var(--ink); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr)); gap:clamp(16px,2.4vw,30px); }
+  .card { text-align:left; cursor:pointer; background:var(--paper); border:4px solid var(--ink); box-shadow:6px 6px 0 var(--ink); padding:0; transition:.15s; display:block; width:100%; }
+  .card:hover { transform:translate(3px,3px) rotate(-.6deg); box-shadow:2px 2px 0 var(--ink); }
+  .card .cv { aspect-ratio:4/3; background:#e4dfd2 center / cover; border-bottom:4px solid var(--ink); }
+  .card .ct { padding:12px 14px 14px; } .card b { display:block; font-size:16px; line-height:1.4; } .card small { opacity:.7; font-weight:900; letter-spacing:.06em; }
+  .card.empty { border-style:dashed; box-shadow:none; cursor:default; background:transparent; } .card.empty:hover { transform:none; }
+  .card.empty .cv { background:none; display:grid; place-items:center; font-weight:900; opacity:.45; }
+  .row { display:block; width:100%; text-align:left; cursor:pointer; background:var(--paper); border:4px solid var(--ink); box-shadow:6px 6px 0 var(--ink); padding:16px 20px; margin-bottom:18px; transition:.15s; max-width:760px; }
+  .row:hover { transform:translate(3px,3px); box-shadow:2px 2px 0 var(--ink); background:var(--yellow); } .row b { font-size:18px; } .row small { display:block; margin-top:4px; font-weight:900; opacity:.7; letter-spacing:.06em; }
+  /* 展開頁的版面：以「舞台寬度的 1%」為單位 u，所以任何螢幕上比例都一樣 */
+  .pstage { position:relative; width:var(--sw); min-height:var(--sh); margin:0 auto; padding-bottom:calc(var(--u)*8); color:#1a1a1a; font-family:"GenRyuMinTW","Noto Serif TC","Songti TC",serif; font-weight:200; }
+  .ptitle { position:absolute; display:block; height:auto; user-select:none; -webkit-user-drag:none; }
+  .ptitle-fb { position:absolute; font-family:var(--display); font-weight:400; font-size:calc(var(--u)*7); line-height:1; margin:0; }
+  .pback { position:absolute; display:block; padding:0; border:0; background:none; cursor:pointer; transition:transform .2s cubic-bezier(.3,1.6,.5,1); }
+  .pback:hover { transform:rotate(-4deg) scale(1.06); } .pback img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
+  .pback.fb { font-family:var(--body); font-weight:900; font-size:calc(var(--u)*1.2); padding:.5em 1em; border:2px solid currentColor; border-radius:50%; }
+  .pbody { position:absolute; left:calc(var(--u)*6); right:calc(var(--u)*6); top:calc(var(--u)*24); font-family:var(--body); font-weight:500; color:var(--ink); }
+  .about-text { position:absolute; left:calc(var(--u)*13.2); top:calc(var(--u)*32.3); width:calc(var(--u)*62); font-size:calc(var(--u)*1.17); line-height:1.7; }
+  .about-text p { margin:0 0 calc(var(--u)*.76); } .about-text h3 { font-weight:700; font-size:1em; margin:calc(var(--u)*1.4) 0 calc(var(--u)*.6); }
+  .about-text img { display:block; max-width:100%; height:auto; margin:calc(var(--u)*1.4) 0; }
+  .about-contact { margin-top:calc(var(--u)*4.1); }
+  .about-contact .k { text-transform:lowercase; } .about-contact .v { margin-left:.9em; color:inherit; text-decoration:none; } .about-contact a.v:hover { text-decoration:underline; text-underline-offset:.2em; }
+  .about-deco { position:absolute; left:calc(var(--u)*68.3); top:calc(var(--u)*27.3); width:calc(var(--u)*32.2); aspect-ratio:1; pointer-events:none; }
+  .about-deco img { position:absolute; inset:0; width:100%; height:100%; opacity:0; user-select:none; -webkit-user-drag:none; } .about-deco img.on { opacity:1; }
+  .w-line { position:absolute; left:calc(var(--u)*31.4); top:calc(var(--u)*23); height:calc(var(--u)*.3); background:var(--line,#6cf04a); width:calc(var(--u)*68.6 + max(0px, (100vw - var(--sw))/2)); }
+  .w-cols { position:absolute; left:calc(var(--u)*11.9); top:calc(var(--u)*28.8); display:grid; grid-auto-flow:column; grid-template-columns:calc(var(--u)*36) calc(var(--u)*36); column-gap:calc(var(--u)*7.2); row-gap:calc(var(--u)*2.91); align-items:start; }
+  .w-item { margin:0; }
+  .w-t { font-weight:700; font-size:calc(var(--u)*1.15); line-height:1.6; } .w-t.link { cursor:pointer; } .w-t.link:hover { text-decoration:underline; text-underline-offset:.2em; }
+  .w-s { font-weight:200; font-size:calc(var(--u)*1.04); line-height:1.6; }
+  .w-s .out { display:inline-block; margin-left:.4em; vertical-align:middle; line-height:0; transition:transform .2s cubic-bezier(.3,1.6,.5,1); } .w-s .out:hover { transform:translate(2px,-2px) scale(1.12); }
+  .w-s .out img { display:block; height:calc(var(--u)*1.7); width:auto; margin:calc(var(--u)*-.3) 0; }
+  .w-note { font-weight:200; font-size:calc(var(--u)*1.04); opacity:.6; margin:0 0 calc(var(--u)*1.2); }
+  .w-detail { position:absolute; left:calc(var(--u)*11.9); top:calc(var(--u)*28.8); width:calc(var(--u)*62); font-size:calc(var(--u)*1.17); line-height:1.9; }
+  .w-detail h2 { font-weight:700; font-size:calc(var(--u)*1.9); line-height:1.5; margin:0 0 .3em; } .w-detail .meta { opacity:.65; margin-bottom:1.6em; font-size:.9em; }
+  .w-detail p { margin:0 0 1em; } .w-detail h3 { font-weight:700; font-size:1em; margin:1.6em 0 .5em; } .w-detail img { display:block; max-width:100%; height:auto; margin:1.4em 0; }
+  /* ---- design：年份分類的作品牆 ---- */
+  .d-accent { position:absolute; height:calc(var(--u)*.28); background:var(--line,#ff3dea); transform-origin:left center; }
+  .d-year { font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:700; font-size:clamp(22px, calc(var(--u)*2.7), 46px); color:var(--line,#ff3dea); margin:0 0 calc(var(--u)*1.4); }
+  .d-year-block { position:relative; margin-bottom:calc(var(--u)*3.6); }
+  .d-row { display:flex; flex-wrap:wrap; align-items:flex-start; gap:calc(var(--u)*1.7) calc(var(--u)*2); overflow:hidden; }
+  .d-row.open { max-height:none !important; }
+  .d-item { display:inline-flex; flex-direction:column; align-items:flex-start; cursor:pointer; background:none; border:0; padding:0; text-align:left; font:inherit; color:inherit; }
+  .d-item .cv { height:calc(var(--u)*20.15); display:flex; align-items:flex-end; background:#efece4; }
+  .d-item .cv img { display:block; height:100%; width:auto; max-width:calc(var(--u)*52); object-fit:contain; }
+  .d-item .cap { font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:200; font-size:calc(var(--u)*1.05); line-height:1.5; margin-top:calc(var(--u)*2.4); width:100%; max-width:calc(var(--u)*32); }
+  .d-more { position:absolute; right:0; width:calc(var(--u)*16.28); cursor:pointer; border:0; background:none; padding:0; transition:transform .15s cubic-bezier(.3,1.6,.5,1); }
+  .d-more:hover { transform:scale(1.06) rotate(-2deg); } .d-more img { display:block; width:100%; height:auto; }
+  .d-empty { font-weight:900; opacity:.55; font-family:var(--body); font-size:calc(var(--u)*1.05); }
+  /* ---- design：單一作品 ---- */
+  .d-cover { display:block; max-width:100%; max-height:60vh; margin:0 auto; }
+  .d-cover-wrap { text-align:center; }
+  .d-title { font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:700; font-size:clamp(22px, calc(var(--u)*2.3), 40px); line-height:1.4; margin:calc(var(--u)*2.6) 0 0; text-align:center; }
+  .d-desc { font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:200; font-size:calc(var(--u)*1.15); line-height:1.8; max-width:calc(var(--u)*70); margin:calc(var(--u)*1) auto 0; text-align:center; }
+  .d-desc p { margin:0 0 .8em; } .d-desc h3 { font-weight:700; font-size:1em; margin:1.2em 0 .4em; }
+  .d-gallery { margin-top:calc(var(--u)*7); display:flex; flex-direction:column; align-items:center; }
+  .d-gitem { margin-bottom:calc(var(--u)*4.4); text-align:center; }
+  .d-gitem img { display:block; height:calc(var(--u)*30); max-width:min(100%, calc(var(--u)*82)); width:auto; object-fit:contain; margin:0 auto; }
+  .d-gitem .cap { font-family:"GenRyuMinTW","Noto Serif TC",serif; font-weight:200; font-size:calc(var(--u)*1.05); line-height:1.6; min-height:1.6em; margin-top:.8em; max-width:calc(var(--u)*60); margin-left:auto; margin-right:auto; }
+  .d-nav { position:fixed; top:50%; transform:translateY(-50%); z-index:12; width:56px; cursor:pointer; border:0; background:none; padding:0; opacity:.85; transition:opacity .15s, transform .15s; }
+  .d-nav:hover { opacity:1; transform:translateY(-50%) scale(1.12); } .d-nav img { display:block; width:100%; height:auto; }
+  .d-nav.l { left:clamp(10px, 3vw, 34px); } .d-nav.r { right:clamp(10px, 3vw, 34px); }
+
+  .n-overview { position:absolute; left:calc(var(--u)*10.9); top:calc(var(--u)*22); width:calc(var(--u)*50); font-size:calc(var(--u)*1.17); line-height:1.7; }
+  .n-overview p { margin:0 0 .6em; }
+  .n-line { position:absolute; right:calc(100% - var(--u)*30.4); height:calc(var(--u)*.28); background:var(--line,#19f0ff);
+             width:calc(var(--u)*30.4 + max(0px, (100vw - var(--sw))/2)); }
+  .n-list { position:absolute; left:calc(var(--u)*10.9); width:calc(var(--u)*46); }
+  .n-item { display:block; width:100%; text-align:left; background:none; border:0; padding:0; margin:0 0 calc(var(--u)*2.7); cursor:pointer; font:inherit; color:inherit; }
+  .n-item .t { font-weight:700; font-size:calc(var(--u)*1.15); line-height:1.6; } .n-item:hover .t { text-decoration:underline; text-underline-offset:.2em; }
+  .n-item .m { font-weight:200; font-size:calc(var(--u)*1.02); opacity:.65; }
+  .n-empty { position:absolute; left:calc(var(--u)*10.9); font-weight:900; opacity:.55; font-size:calc(var(--u)*1.05); font-family:var(--body); }
+  .n-sub { position:absolute; cursor:pointer; padding:0; border:0; background:none; transition:transform .15s cubic-bezier(.3,1.6,.5,1); }
+  .n-sub:hover { transform:scale(1.06) rotate(-2deg); } .n-sub img { display:block; width:100%; height:auto; user-select:none; -webkit-user-drag:none; }
+  .n-seal { position:absolute; pointer-events:none; user-select:none; -webkit-user-drag:none; }
+  .n-seal img { display:block; width:100%; height:auto; }
+  .n-heart { position:absolute; width:calc(var(--u)*4.9); pointer-events:none; opacity:0; transform:scale(.6) translateY(6px); transition:opacity .3s, transform .35s cubic-bezier(.3,1.6,.5,1); }
+  .n-heart.on { opacity:1; transform:scale(1) translateY(0); } .n-heart img { display:block; width:100%; height:auto; }
+
+  /* 訂閱彈窗：不蓋滿整頁，背景加一層半透明白 */
+  #modalBg { position:fixed; inset:0; z-index:20; background:rgba(255,255,255,.72); backdrop-filter:blur(1.5px); opacity:0; pointer-events:none; transition:opacity .3s ease; }
+  #modalBg.on { opacity:1; pointer-events:auto; }
+  #modalCard { position:fixed; z-index:21; left:50%; top:50%; width:min(420px,86vw); background:#fff; border:3px solid #1a1a1a;
+               padding:28px 26px 24px; font-family:"GenRyuMinTW","Noto Serif TC","Songti TC",serif; font-weight:200; opacity:0; pointer-events:none; transform:translate(-50%,-46%); transition:opacity .28s ease, transform .28s cubic-bezier(.3,1.4,.5,1); }
+  #modalCard.on { opacity:1; pointer-events:auto; transform:translate(-50%,-50%); }
+  #modalCard h4 { font-weight:700; font-size:22px; margin:0 0 18px; }
+  #modalCard label { display:block; font-weight:200; font-size:14px; margin:14px 0 6px; }
+  #modalCard input, #modalCard textarea { width:100%; box-sizing:border-box; font:inherit; font-size:14px; padding:9px 11px; border:2px solid #1a1a1a; background:#fff; }
+  #modalCard textarea { resize:vertical; min-height:70px; }
+  #modalCard .mbar { display:flex; justify-content:flex-end; margin-top:20px; }
+  #modalSend { display:block; width:144px; padding:0; border:0; background:none; cursor:pointer; transition:transform .15s cubic-bezier(.3,1.6,.5,1); }
+  #modalSend:hover { transform:scale(1.06); } #modalSend img { display:block; width:100%; height:auto; }
+  #modalClose { position:absolute; right:14px; top:12px; border:0; background:none; cursor:pointer; font-size:18px; font-weight:900; line-height:1; padding:4px; font-family:var(--body); }
+  /* 螢幕很窄（手機）時，純文字內容改用可讀的最小字級，圖片與版面位置不受影響 */
+  body.narrow .about-text, body.narrow .n-overview { font-size:max(15px, calc(var(--u)*1.17)); }
+  body.narrow .w-t { font-size:max(15px, calc(var(--u)*1.15)); }
+  body.narrow .w-s, body.narrow .n-item .m { font-size:max(13px, calc(var(--u)*1.04)); }
+  body.narrow .n-item .t { font-size:max(15px, calc(var(--u)*1.15)); }
+  body.narrow .w-detail { font-size:max(15px, calc(var(--u)*1.17)); }
+  body.narrow .n-empty { font-size:max(14px, calc(var(--u)*1.05)); }
+  body.narrow .d-item .cap { font-size:max(13px, calc(var(--u)*1.05)); }
+  body.narrow .d-desc { font-size:max(15px, calc(var(--u)*1.15)); }
+  body.narrow .d-gitem .cap { font-size:max(13px, calc(var(--u)*1.05)); }
+
+  /* ===== 手機：展開頁的版面改成單欄、由上往下自然排列（不用硬性對齊固定座標） ===== */
+  body.narrow .pstage { padding-top:25vh; padding-bottom:50vh; }   /* padding（不是 margin）避免子層的 margin-top 跟 pstage 邊界重疊塌陷，導致蓋到上面的大標題 */
+  body.narrow .pbody { position:static; left:auto; right:auto; top:auto; width:88vw; margin:0 auto; }
+  body.narrow .ptitle, body.narrow .ptitle-fb { top:4vh !important; left:6vw !important; width:56vw !important; }
+  body.narrow .pback { top:4vh !important; left:auto !important; right:5vw !important; width:15vw !important; }
+
+  /* about */
+  body.narrow .about-text { position:static; width:88vw; margin:0 auto; }
+  body.narrow .about-deco { position:relative; left:auto; top:auto; width:56vw; margin:5vh auto 0; }
+  body.narrow .about-contact { margin-top:3vh; }
+
+  /* writing */
+  body.narrow .w-line { position:static; width:46vw; margin:0 0 0 6vw; }
+  body.narrow .w-cols { position:static; display:block; width:88vw; margin:4vh auto 0; }
+  body.narrow .w-item { margin-bottom:4.4vh; }
+
+  /* newsletter：裝飾和返回鍵都挪到畫面下方 */
+  body.narrow .n-overview { position:static; width:88vw; margin:0 auto; }
+  body.narrow .n-line { position:static; width:46vw; margin:3vh 0 0 6vw; right:auto; top:auto !important; }
+  body.narrow .n-list, body.narrow .n-empty { position:static; width:88vw; margin:4vh auto 0; top:auto !important; }
+  body.narrow .area-newsletter .pback { top:auto !important; bottom:5vh !important; left:6vw !important; right:auto !important; }
+  body.narrow .n-sub { position:fixed; left:auto !important; right:8vw !important; bottom:20vh !important; top:auto !important; width:24vw !important; }
+  body.narrow .n-seal { position:fixed; left:auto !important; right:6vw !important; bottom:5vh !important; top:auto !important; width:28vw !important; }
+  body.narrow .n-heart { position:fixed; left:auto !important; right:4vw !important; bottom:24vh !important; top:auto !important; }
+
+  /* design：一年預設兩件（固定高度、寬度不超出畫面），超過用「更多」，展開後一行一件 */
+  body.narrow .d-accent { display:none; }
+  body.narrow .d-year-block { position:static; width:100%; margin:0 auto 5vh; }
+  body.narrow .d-row { display:flex; flex-direction:column; align-items:center; gap:3.6vh; max-height:none !important; overflow:visible; }
+  body.narrow .d-item { width:100%; display:flex; flex-direction:column; align-items:center; }
+  body.narrow .d-item .cv { height:auto; width:auto; max-width:90vw; max-height:30vh; background:none; }
+  body.narrow .d-item .cv img { height:auto; max-height:30vh; width:auto; max-width:90vw; }
+  body.narrow .d-item .cap { text-align:center; }
+  body.narrow .d-row.clamped .d-item:nth-child(n+3) { display:none; }
+  body.narrow .d-more { position:static; margin:1vh auto 0; }
+
+
+    h3.sec { font-family:var(--display); font-weight:400; font-size:24px; margin:38px 0 16px; }
+  .empty-note { font-weight:900; opacity:.7; margin:6px 0 24px; }
+</style>
+</head>
+<body>
+
+<div id="wall"><div id="stage"></div></div>
+
+<div id="rgb"></div>
+<div id="modalBg"></div>
+<div id="modalCard"><button id="modalClose" aria-label="關閉">✕</button><h4>訂閱電子報</h4>
+  <label for="mlEmail">email（必填）</label><input id="mlEmail" type="email" required placeholder="you@example.com">
+  <label for="mlNote">有興趣的內容／想說的話</label><textarea id="mlNote" placeholder="（非必填）"></textarea>
+  <p id="modalErr" style="color:#ff3030; font-size:13px; min-height:1.4em; margin:10px 0 0;"></p>
+  <div class="mbar"><button id="modalSend" aria-label="送出"><img src="assets/06-newsletter/done-button.png" alt="送出"></button></div>
+</div>
+<div id="panel" aria-live="polite"><div class="bgimg" id="panelBg"></div><div id="scroller"></div></div>
+
+<div id="intro">
+  <div id="introBg"></div>
+  <button id="reader" aria-label="刷卡開始">
+    <div class="stack" id="machine">
+      <img src="assets/01-loading/call-button01.png" alt="" class="on">
+      <img src="assets/01-loading/call-button02.png" alt="">
+      <img src="assets/01-loading/call-button03.png" alt="">
+    </div>
+    <div class="stack" id="labels">
+      <img src="assets/01-loading/label-press.png" alt="tap to start" class="on">
+      <img src="assets/01-loading/label-connecting.png" alt="connecting">
+      <img src="assets/01-loading/label-welcome.png" alt="welcome">
+    </div>
+  </button>
+</div>
+
+<script src="content/content.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const SITE = window.SITE || { about:{}, contact:[], design:[], writing:[], newsletter:{}, issues:[] };
+
+/* ============ 牆上的圖樣（位置、大小、角度都可以在這裡調整） ============
+   x, y：圖樣中心在畫面上的位置（%）　w：寬度（畫面寬的 %）　rot：傾斜角度
+   img：你畫的圖樣（透明 PNG）　bg：展開後的背景圖（可選）　c / shape：沒有圖時的暫代顏色與形狀 */
+/* ============ 牆面的擺放（依你的參考圖量出來的） ============
+   整個牆是一個固定比例（REF）的「舞台」，在任何螢幕上都會等比縮放、置中，所以構圖不會跑掉。
+   x, y：圖樣中心的位置（佔舞台寬、高的 %）　w：圖樣寬度（佔舞台寬的 %）　rot：傾斜角度
+   tx, ty, tw：滑過時顯示的 title 的中心位置與寬度（同樣以舞台為準） */
+const REF = { w:1676, h:1054 };
+const AREAS = [
+  { id:"about", title:"ABOUT ME / CONTACT", zh:"關於我／聯絡", c:"#FF3A2E", morder:0,
+    x:37.1, y:38.4, w:25.9, rot:-6.4, tx:24.64, ty:14.99, tw:24.03, tr:-10.25, sy:1.02,
+    frame:["#ff3030","rgba(255,110,110,.6)"], titleBig:"assets/03-about-contact/about-title-big.png", titlePos:{l:3.4,t:3.6,w:46.9},
+    back:"assets/02-wall/ui/about-back-button.png", backPos:{l:85.4,t:3.5,w:12.2},
+    deco:["assets/03-about-contact/about-deco01.png","assets/03-about-contact/about-deco02.png","assets/03-about-contact/about-deco03.png","assets/03-about-contact/about-deco04.png"],
+    img:"assets/02-wall/motifs/about-contact-hover.png", titleImg:"assets/02-wall/motifs/about-contact-title.png", bg:"assets/02-wall/panels/about-contact-bg.png" },
+  { id:"writing", title:"WRITING", zh:"隨筆", c:"#19E63A", morder:1,
+    x:63.8, y:27.1, w:27.3, rot:6, tx:76.75, ty:10.59, tw:25.14, tr:9.75, sy:1.06,
+    frame:["#4dff3d","rgba(120,255,110,.6)"], line:"#6cf04a", titleBig:"assets/05-writing/writing-title-big.png", titlePos:{l:7.4,t:2.3,w:41.5},
+    back:"assets/02-wall/ui/writing-back-button.png", backPos:{l:85.3,t:3.8,w:12},
+    img:"assets/02-wall/motifs/writing-hover.png", titleImg:"assets/02-wall/motifs/writing-title.png", bg:"assets/02-wall/panels/writing-bg.png" },
+  { id:"newsletter", title:"NEWSLETTER", zh:"電子報", c:"#19F0FF", morder:3,
+    x:72.2, y:73.2, w:34.9, rot:-5.6, tx:64.86, ty:49.63, tw:27.65, tr:-5.75, sy:1.48,
+    frame:["#19f0ff","rgba(110,250,255,.6)"], titleBig:"assets/06-newsletter/newsletter-title-big.png", titlePos:{l:6.43,t:6.62,w:48.73},
+    subPos:{l:74.55,t:29.36,w:14.36}, sealPos:{l:74.57,t:36.02,w:22.55},   // subPos 已含：往上再 1cm(2.21u)、以中心縮小成 0.7 倍
+    back:"assets/02-wall/ui/newsletter-back-button.png", backPos:{l:85.4,t:3.5,w:12.2},
+    img:"assets/02-wall/motifs/newsletter-hover.png", titleImg:"assets/02-wall/motifs/newsletter-title.png", bg:"assets/02-wall/panels/newsletter-bg.png" },
+  { id:"design", title:"DESIGN", zh:"平面設計", c:"#FF3DEB", morder:2,
+    x:37.1, y:73.7, w:40.6, rot:-0.6, tx:18.66, ty:57.78, tw:17.25, tr:-10.75, sy:1.16,
+    frame:["#ff3dea","rgba(255,130,240,.6)"], titleBig:"assets/04-design/design-title-big.png", titlePos:{l:4,t:3.4,w:44},
+    back:"assets/02-wall/ui/design-back-button.png", backPos:{l:85.4,t:3.5,w:12.2},
+    img:"assets/02-wall/motifs/design-hover.png", titleImg:"assets/02-wall/motifs/design-title.png", bg:"assets/02-wall/panels/design-bg.png" },
+];
+const A = Object.fromEntries(AREAS.map(a => [a.id, a]));
+
+/* 慢慢在畫面裡彈來彈去的草皮圓（不可點）。
+   w：圖片寬度（佔舞台寬的 %）　sx, sy：一開始的中心位置（舞台 %）　speed：每秒移動多少 px　spin：每秒旋轉幾度 */
+const DECO = { img:"assets/02-wall/deco/deco-01.png", w:41.5, sx:43.6, sy:55.5, speed:46, spin:4 };
+
+/* ============ 音效：點下門禁機時播放你自己的刷卡音檔，其他地方都沒有聲音 ============ */
+function swipeSound(){ new Audio("assets/audio/swipe.mp3").play().catch(() => {}); }
+
+/* ============ 載入畫面 ============ */
+const setStep = i => document.querySelectorAll("#machine img, #labels img").forEach((im,k) => im.classList.toggle("on", k%3===i));
+document.querySelectorAll("#intro img").forEach(im => { const p = new Image(); p.src = im.src; });
+{ // 每次進站，從 3 張背景字裡隨機挑一張；直式手機用直式那份
+  const portrait = innerHeight > innerWidth;
+  const n = 1 + Math.floor(Math.random()*3);
+  const url = `assets/01-loading/background0${n}${portrait ? "-straight" : ""}.png`;
+  const im = new Image(); im.onload = im.onerror = () => { $("introBg").style.backgroundImage = `url(${url})`; $("introBg").classList.add("ready"); }; im.src = url;
+  if(portrait){
+    $("labels").children[0].src = "assets/01-loading/label-press-straight.png";
+    $("labels").children[1].src = "assets/01-loading/label-connecting-straight.png";
+    $("labels").children[2].src = "assets/01-loading/label-welcome-straight.png";
+  }
+}
+$("reader").onclick = async () => {
+  const r = $("reader"); r.disabled = true;
+  swipeSound(); r.classList.add("swipe");
+  await wait(320); r.classList.remove("swipe");
+  setStep(1); r.classList.add("pending");
+  await wait(2600);
+  r.classList.remove("pending"); setStep(2);
+  await wait(1700);
+  $("intro").classList.add("gone"); $("wall").classList.add("ready"); $("rgb").classList.add("on");
+};
+
+/* ============ 牆面 ============ */
+{ const im = new Image(); const u = "assets/02-wall/wall-bg.png"; im.onload = () => { $("wall").style.backgroundImage = `url(${u})`; }; im.src = u; }
+const stage = $("stage");
+function layoutStage(){ const sw = Math.min(innerWidth, innerHeight * REF.w / REF.h); stage.style.width = sw + "px"; stage.style.height = sw * REF.h / REF.w + "px";
+  const u = sw / 100, sc = $("scroller"); sc.style.setProperty("--u", u + "px"); sc.style.setProperty("--sw", 100 * u + "px"); sc.style.setProperty("--sh", 100 * u * REF.h / REF.w + "px");
+  document.documentElement.classList.toggle("narrow", sw < 560); document.body.classList.toggle("narrow", sw < 560); }   // 螢幕很窄（手機）時：內文改用可讀的最小字級，首頁牆面也改成直式一排排往下滑
+layoutStage(); addEventListener("resize", layoutStage);
+addEventListener("resize", () => { if(document.body.classList.contains("narrow")) return; document.querySelectorAll(".d-item").forEach(it => { const im = it.querySelector(".cv img"); if(im && im.complete && im.naturalWidth) it.style.width = im.offsetWidth + "px"; }); });
+const els = {}, M = [];               // M：每個圖樣的資料（位置、透明度取樣、標題）
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* 讀取圖片透明度，只有「有畫到的地方」才算碰到；file:// 開啟時瀏覽器不允許讀取，就退回用整個方框判斷 */
+function sampler(img){
+  try{
+    const W = 300, H = Math.max(1, Math.round(W * img.naturalHeight / img.naturalWidth));
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d", { willReadFrequently:true }); g.drawImage(img, 0, 0, W, H);
+    const d = g.getImageData(0, 0, W, H).data;
+    let x0=W, y0=H, x1=0, y1=0;
+    for(let y=0;y<H;y++) for(let x=0;x<W;x++) if(d[(y*W+x)*4+3] > 20){ if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; }
+    return { at:(u,v) => { const x = Math.floor(u*W), y = Math.floor(v*H); return x>=0 && y>=0 && x<W && y<H && d[(y*W+x)*4+3] > 20; },
+             box: x1>=x0 ? { x0:x0/W, y0:y0/H, x1:(x1+1)/W, y1:(y1+1)/H } : { x0:0, y0:0, x1:1, y1:1 } };
+  }catch(e){ return null; }
+}
+AREAS.forEach((a, i) => {
+  const b = document.createElement("div");
+  b.className = "motif"; b.tabIndex = 0; b.setAttribute("role", "button"); b.setAttribute("aria-label", a.title);
+  b.style.cssText = `left:${a.x}%; top:${a.y}%; --w:${a.w}%; --rot:${a.rot||0}deg; --delay:${i*.15}s; --mo:${a.morder||0}`;
+  const inner = document.createElement("div"); inner.className = "inner"; b.appendChild(inner);
+  const m = { a, el:b, s:null, ratio:1, ph:false, title:null };
+  const img = new Image(); img.alt = a.title; img.draggable = false;
+  img.onload = () => { m.ratio = img.naturalHeight / img.naturalWidth; m.s = sampler(img); };
+  img.onerror = () => { m.ph = true; const ph = document.createElement("div"); ph.className = "ph"; ph.style.cssText = `--c:${a.c}; --r:${a.shape}`; ph.textContent = a.title; img.replaceWith(ph); };
+  img.src = a.img; inner.appendChild(img);
+  const cap = document.createElement("span"); cap.className = "m-cap"; cap.textContent = a.title; b.appendChild(cap);   // 手機：標題常駐顯示在圖樣下方，不需要滑過
+  b.addEventListener("click", e => { if(document.body.classList.contains("narrow")){ e.stopPropagation(); openArea(a, b); } });
+  if(a.titleImg){ const t = new Image(); t.className = "ttl"; t.alt = ""; t.draggable = false; t.src = a.titleImg; t.onload = () => { m.title = t; }; t.style.cssText = `--tx:${a.tx}%; --ty:${a.ty}%; --tw:${a.tw}%; --tr:${a.tr||0}deg; --sy:${a.sy||1}`; stage.appendChild(t); m.titleEl = t; }
+  b.onkeydown = e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openArea(a, b); } };
+  b.onfocus = () => showHot(m); b.onblur = () => showHot(null);
+  stage.appendChild(b); els[a.id] = b; M.push(m);
+});
+
+/* 命中判斷：把滑鼠位置換算成圖片內的位置（考慮旋轉），再看該點有沒有畫到 */
+function localUV(m, px, py){
+  const el = m.el, r = el.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+  const th = -(m.a.rot || 0) * Math.PI/180, dx = px - cx, dy = py - cy;
+  const x = dx*Math.cos(th) + dy*Math.sin(th), y = -dx*Math.sin(th) + dy*Math.cos(th);
+  const w = el.offsetWidth, h = m.ph ? w : w * m.ratio;
+  return { u:(x + w/2)/w, v:(y + h/2)/h };
+}
+function hitTest(px, py){
+  for(let i = M.length - 1; i >= 0; i--){
+    const m = M[i], { u, v } = localUV(m, px, py);
+    if(u < 0 || u > 1 || v < 0 || v > 1) continue;
+    if(m.ph || !m.s || m.s.at(u, v)) return m;
+  }
+  return null;
+}
+
+/* 滑過：換成 hover 圖，並顯示固定位置的 title */
+let hot = null;
+const overlap = (p, q) => Math.max(0, Math.min(p.r, q.r) - Math.max(p.l, q.l)) * Math.max(0, Math.min(p.b, q.b) - Math.max(p.t, q.t));
+function showHot(m){
+  if(hot === m) return;
+  if(hot){ hot.el.classList.remove("hot"); if(hot.titleEl) hot.titleEl.classList.remove("on"); }
+  hot = m;
+  if(m){ m.el.classList.add("hot"); if(m.titleEl) m.titleEl.classList.add("on"); }
+  $("wall").style.cursor = m ? "pointer" : "default";
+}
+$("wall").addEventListener("pointermove", e => { if(!current && !document.body.classList.contains("narrow")) showHot(hitTest(e.clientX, e.clientY)); });
+$("wall").addEventListener("pointerleave", () => showHot(null));
+$("wall").addEventListener("click", e => { if(document.body.classList.contains("narrow")) return; const m = hitTest(e.clientX, e.clientY); if(m) openArea(m.a, m.el); });
+
+/* 彈來彈去的裝飾 */
+{
+  const d = new Image(); d.id = "deco"; d.alt = ""; d.draggable = false;
+  d.onload = () => {
+    const s = sampler(d), box = (s && s.box) || { x0:0, y0:0, x1:1, y1:1 };
+    const sw = () => parseFloat(stage.style.width), sl = () => (innerWidth - sw()) / 2, stp = () => (innerHeight - parseFloat(stage.style.height)) / 2;
+    let W, H; const st = { x:0, y:0, vx:DECO.speed, vy:DECO.speed * .72, rot:0 };
+    const ext = () => ({ l:box.x0*W, t:box.y0*H, r:box.x1*W, b:box.y1*H });
+    const place = () => { W = sw() * DECO.w / 100; H = W * d.naturalHeight / d.naturalWidth; d.style.width = W + "px"; };
+    place(); addEventListener("resize", place);
+    st.x = sl() + sw()*DECO.sx/100 - W/2; st.y = stp() + parseFloat(stage.style.height)*DECO.sy/100 - H/2;   // 一開始的位置（依參考圖）
+    d.style.transform = `translate(${st.x}px,${st.y}px)`;
+    let last = performance.now();
+    (function tick(now){
+      const dt = Math.min(.05, (now - last)/1000); last = now;
+      if(!reduceMotion && !current && !document.hidden){
+        const e = ext(); st.x += st.vx*dt; st.y += st.vy*dt; st.rot += DECO.spin*dt;
+        if(st.x + e.l < 0){ st.x = -e.l; st.vx = Math.abs(st.vx); } else if(st.x + e.r > innerWidth){ st.x = innerWidth - e.r; st.vx = -Math.abs(st.vx); }
+        if(st.y + e.t < 0){ st.y = -e.t; st.vy = Math.abs(st.vy); } else if(st.y + e.b > innerHeight){ st.y = innerHeight - e.b; st.vy = -Math.abs(st.vy); }
+        d.style.transform = `translate(${st.x}px,${st.y}px) rotate(${st.rot}deg)`;
+      }
+      requestAnimationFrame(tick);
+    })(last);
+  };
+  d.src = DECO.img; $("wall").insertBefore(d, stage);
+}
+
+/* 邊框光：首頁每 5 秒換一個顏色（載入畫面不顯示）；展開頁固定成該區的螢光色 */
+const FRAME_CYCLE = [["#ff2a2a","rgba(255,110,110,.55)"], ["#ff8a00","rgba(255,170,70,.55)"], ["#f2ff00","rgba(245,255,110,.6)"], ["#1fd94a","rgba(110,255,140,.55)"],
+                     ["#00f0ff","rgba(110,250,255,.55)"], ["#3a3aff","rgba(120,120,255,.55)"], ["#a020ff","rgba(190,110,255,.55)"], ["#ff3dcb","rgba(255,130,225,.55)"], ["#111111","rgba(0,0,0,.45)"]];
+let frameK = 0, frameOverride = null;
+function paintFrame(){ const c = frameOverride || FRAME_CYCLE[frameK], f = $("rgb"); f.style.setProperty("--g1", c[0]); f.style.setProperty("--g2", c[1]); }
+paintFrame(); setInterval(() => { frameK = (frameK + 1) % FRAME_CYCLE.length; paintFrame(); }, 5000);
+
+/* ============ 展開 / 收合 ============ */
+const el = (tag, cls, text) => { const e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; };
+let current = null, busy = false;
+const view = { back:null, timer:0 };
+function setRect(r, radius){ const p = $("panel"); p.style.left = r.left+"px"; p.style.top = r.top+"px"; p.style.width = r.width+"px"; p.style.height = r.height+"px"; p.style.borderRadius = radius; }
+async function openArea(a, btn){
+  if(busy) return; busy = true; current = a; view.back = null; clearInterval(view.timer);
+  const p = $("panel"), m = M.find(o => o.el === btn), b = (m && m.s && m.s.box) || { x0:.15, y0:.15, x1:.85, y1:.85 };
+  const r = btn.getBoundingClientRect(), w = btn.offsetWidth, h = m && !m.ph ? w * m.ratio : w, cx = r.left + r.width/2, cy = r.top + r.height/2;
+  const sw = (b.x1 - b.x0) * w * .7, sh = (b.y1 - b.y0) * h * .7;              // 從圖樣正中央的一個小圓開始展開（沒有邊框）
+  p.style.setProperty("--c", a.c); p.style.transition = "none"; p.style.opacity = "1"; p.classList.remove("show", "white"); $("scroller").innerHTML = ""; $("scroller").scrollTop = 0;
+  $("panelBg").style.backgroundImage = "";
+  p.style.display = "block"; p.style.borderWidth = "0px"; setRect({ left:cx - sw/2, top:cy - sh/2, width:sw, height:sh }, "50%");
+  void p.offsetWidth; p.style.transition = "";
+  showHot(null); $("wall").classList.add("dim");
+  frameOverride = a.frame; paintFrame(); $("rgb").classList.add("on");           // 邊框光變成該區的螢光色
+  setRect({left:0, top:0, width:innerWidth, height:innerHeight}, "0px");
+  RENDER[a.id]();
+  await wait(620); p.classList.add("white");                                       // 底色展開後，回歸白底
+  await wait(560); p.classList.add("show"); busy = false;
+}
+async function closeArea(){           // 收合：內容先淡出，整片再慢慢消散回牆面
+  if(busy || !current) return; busy = true;
+  const p = $("panel");
+  p.classList.remove("show"); clearInterval(view.timer); await wait(250);
+  frameOverride = null; paintFrame();
+  p.style.transition = "opacity .8s ease"; p.style.opacity = "0";
+  await wait(820);
+  p.style.display = "none"; p.style.transition = ""; p.style.opacity = "1"; p.classList.remove("white"); clearDesignNav();
+  $("wall").classList.remove("dim"); current = null; view.back = null; busy = false;
+}
+addEventListener("keydown", e => { if(e.key === "Escape") { if(view.back) view.back(); else closeArea(); } });
+addEventListener("resize", () => { if(current && !busy) setRect({left:0, top:0, width:innerWidth, height:innerHeight}, "0px"); });
+
+/* ============ 訂閱彈窗 ============ */
+let newsletterForm = "";   // Formspree（或其他表單服務）的收件網址，讀自 assets/06-newsletter/newsletter.md 的 form:
+function openModal(){ $("modalBg").classList.add("on"); $("modalCard").classList.add("on"); $("modalErr").textContent = ""; $("mlEmail").focus(); }
+function closeModal(){ $("modalBg").classList.remove("on"); $("modalCard").classList.remove("on"); }
+$("modalBg").onclick = closeModal; $("modalClose").onclick = closeModal;
+$("modalSend").onclick = async () => {
+  const email = $("mlEmail").value.trim();
+  if(!email || !email.includes("@")){ $("mlEmail").focus(); $("mlEmail").style.borderColor = "#ff3030"; return; }
+  $("mlEmail").style.borderColor = "#1a1a1a"; $("modalErr").textContent = "";
+  const note = $("mlNote").value.trim(), btn = $("modalSend"); btn.style.opacity = ".5"; btn.style.pointerEvents = "none";
+  try{
+    if(newsletterForm){
+      const r = await fetch(newsletterForm, { method:"POST", headers:{ "Accept":"application/json" }, body:new URLSearchParams({ email, message:note }) });
+      if(!r.ok) throw new Error("send failed");
+    } else console.log("newsletter signup（尚未設定 form:，只在瀏覽器印出）", { email, note });
+    closeModal(); $("mlEmail").value = ""; $("mlNote").value = "";
+    const h = document.querySelector(".n-heart"); if(h){ h.classList.add("on"); clearTimeout(h._t); h._t = setTimeout(() => h.classList.remove("on"), 3000); }
+  }catch(e){ $("modalErr").textContent = "寄送失敗，請稍後再試一次。"; }
+  finally{ btn.style.opacity = ""; btn.style.pointerEvents = ""; }
+};
+
+async function fadeSwap(fn){
+  const s = $("scroller"); s.style.transition = "opacity .28s ease"; s.style.opacity = "0"; await wait(280);
+  fn(); void s.offsetWidth; s.style.opacity = "1";
+}
+
+/* ============ 展開頁的共用外殼：大標題（左上）＋ 返回鍵（右上） ============ */
+const U = n => `calc(var(--u)*${n})`;
+function shell(a, backFn, opts){
+  const ps = el("div", "pstage area-" + a.id); view.back = backFn || null; clearInterval(view.timer);
+  if(!(opts && opts.noTitle)){
+    const tp = a.titlePos, t = new Image(); t.className = "ptitle"; t.alt = a.title; t.draggable = false;
+    t.style.cssText = `left:${U(tp.l)}; top:${U(tp.t)}; width:${U(tp.w)}`;
+    t.onerror = () => { const h = el("h1", "ptitle-fb", a.title); h.style.cssText = `left:${U(tp.l)}; top:${U(tp.t + 2)}`; t.replaceWith(h); };
+    t.src = a.titleBig; ps.append(t);
+  }
+  const bp = a.backPos, b = el("button", "pback"); b.setAttribute("aria-label", "返回"); b.style.cssText = `left:${U(bp.l)}; top:${U(bp.t)}; width:${U(bp.w)}`;
+  const bi = new Image(); bi.alt = "back"; bi.draggable = false; bi.onerror = () => { b.classList.add("fb"); b.textContent = backFn ? "back" : "close"; }; bi.src = a.back; b.appendChild(bi);
+  b.onclick = () => (backFn || closeArea)();
+  ps.append(b); return ps;
+}
+function mount(ps){ const s = $("scroller"); s.innerHTML = ""; s.append(ps); s.scrollTop = 0; }
+function renderBlocks(list){
+  const box = el("div", "prose");
+  list.forEach(b => {
+    if(b.type === "p") box.append(el("p", "", b.text));
+    else if(b.type === "h") box.append(el("h3", "", b.text));
+    else if(b.type === "img"){ const im = new Image(); im.src = b.src; im.alt = b.alt || ""; im.loading = "lazy"; box.append(im); }
+  });
+  return box;
+}
+
+/* ============ 各區域內容 ============ */
+const RENDER = {
+  /* ABOUT ME / CONTACT：左邊文字、右下角四張圖每 3 秒輪播 */
+  about(){
+    const a = A.about, ab = SITE.about || {}, ps = shell(a);
+    const tx = el("div", "about-text");
+    if(ab.blocks && ab.blocks.length) ab.blocks.forEach(b => {
+      if(b.type === "p") tx.append(el("p", "", b.text)); else if(b.type === "h") tx.append(el("h3", "", b.text));
+      else if(b.type === "img"){ const im = new Image(); im.src = b.src; im.alt = b.alt || ""; tx.append(im); }
+    }); else tx.append(el("p", "", "自我介紹寫在 assets/03-about-contact/about.md"));
+    const ct = el("div", "about-contact");
+    (SITE.contact || []).forEach(c => {
+      const p = el("p"), k = el("span", "k", c.label + ":"); p.append(k);
+      const v = el(c.url ? "a" : "span", "v", c.text || c.url);
+      if(c.url){ v.href = c.url; if(!c.url.startsWith("mailto:")){ v.target = "_blank"; v.rel = "noopener"; } }
+      p.append(v); ct.append(p);
+    });
+    tx.append(ct); ps.append(tx);
+    const dc = el("div", "about-deco"), imgs = (a.deco || []).map(u => { const im = new Image(); im.alt = ""; im.draggable = false; im.src = u; dc.append(im); return im; });
+    ps.append(dc); mount(ps);
+    let i = 0; const show = () => imgs.forEach((im, k) => im.classList.toggle("on", k === i));
+    if(imgs.length){ show(); if(imgs.length > 1) view.timer = setInterval(() => { i = (i + 1) % imgs.length; show(); }, 3000); }
+  },
+  /* WRITING：左右兩欄，左上最新、右下最舊；每篇「篇名（粗）＋收錄處」，有外部連結就在第二行最後放跳轉按鈕 */
+  writing(){
+    const a = A.writing, ps = shell(a); let list = (SITE.writing || []).slice(), sample = false;
+    if(!list.length){ sample = true; list = Array.from({ length:7 }, (_, i) => ({ title:"文章篇名（範例 " + (i + 1) + "）", source:"收錄於《書名或雜誌》，出版社，2025 年 1 月", url:i % 3 === 0 ? "#" : "", blocks:[] })); }
+    const line = el("div", "w-line"); line.style.setProperty("--line", a.line || "#6cf04a"); ps.append(line);
+    const n = list.length, rows = Math.ceil(n / 2);                                 // 左欄 rows 篇、右欄 rows-1（或相等）篇
+    const cols = el("div", "w-cols"); cols.style.gridTemplateRows = `repeat(${rows}, auto)`;   // 同一列的兩篇，列高自動取較高者，所以會對齊
+    list.forEach((w, i) => {
+      const it = el("div", "w-item");
+      const t = el("div", "w-t"); t.innerHTML = (w.title || "").replace(/([—─－]{2,})/g, (m, d, i) => (i > 0 ? "<br>" : "") + d);    // 篇名遇到連續的破折號（— 或 ─）就在那裡換行，破折號留在新的一行開頭
+      if(w.blocks && w.blocks.length){ t.classList.add("link"); t.onclick = () => writingDetail(w); }
+      const s = el("div", "w-s"); s.append(document.createTextNode(w.source || ""));
+      if(w.url){ const o = el("a", "out"); o.href = w.url; o.target = "_blank"; o.rel = "noopener"; o.setAttribute("aria-label", "開啟外部連結"); const im = new Image(); im.src = "assets/05-writing/out-web-button.png"; im.alt = "↗"; o.append(im); if(sample) o.onclick = e => e.preventDefault(); s.append(o); }
+      it.append(t, s); cols.append(it);
+    });
+    ps.append(cols);
+    if(sample){ const nt = el("p", "w-note", "（以上是版面範例；文章放進 assets/05-writing/ 之後會自動取代）"); nt.style.cssText = `position:absolute; left:${U(11.9)}; top:${U(20)}`; ps.append(nt); }
+    mount(ps);
+    // cols 是絕對定位，不會撐開 pstage 的高度，所以量出它實際渲染的底部位置，把 pstage 撐到「內容底部 + 半個螢幕高」
+    requestAnimationFrame(() => { ps.style.minHeight = (cols.offsetTop + cols.offsetHeight + innerHeight * .5) + "px"; });
+  },
+  design(){
+    clearDesignNav();
+    const a = A.design, list = SITE.design || [], ps = shell(a), body = el("div", "pbody");
+    const accent = el("div", "d-accent"); accent.style.cssText = `left:${U(46.1)}; top:${U(17.2)}; width:${U(18.9)}; transform:rotate(14deg);`; accent.style.setProperty("--line", a.frame ? a.frame[0] : "#ff3dea"); ps.append(accent);
+    if(!list.length){ body.append(el("p", "d-empty", "（作品放進 assets/04-design/ 就會出現）")); ps.append(body); mount(ps);
+      requestAnimationFrame(() => { ps.style.minHeight = (body.offsetTop + body.offsetHeight + innerHeight * .5) + "px"; }); return; }
+    const byYear = {}; list.forEach(w => (byYear[w.year || "－"] ||= []).push(w));
+    Object.keys(byYear).sort((x, y) => y.localeCompare(x, undefined, { numeric:true })).forEach(year => {
+      const block = el("div", "d-year-block"); block.append(el("div", "d-year", year));
+      const row = el("div", "d-row");
+      byYear[year].forEach(w => {
+        const it = el("button", "d-item"), cv = el("div", "cv");
+        const im = new Image(); im.alt = w.title; im.loading = "lazy"; im.draggable = false;
+        im.onload = () => { if(!document.body.classList.contains("narrow")) it.style.width = im.offsetWidth + "px"; };   // 桌機：圖片的實際寬度決定整個卡片的寬度，名稱文字才會照這個寬度換行，不會比封面還寬（手機版本來就是單欄滿寬，不需要這個）
+        if(w.cover) im.src = w.cover;
+        cv.append(im);
+        const cap = el("div", "cap", w.title + (w.role ? "｜" + w.role : ""));
+        it.append(cv, cap); it.onclick = () => fadeSwap(() => designDetail(w)); row.append(it);
+      });
+      block.append(row); body.append(block);
+    });
+    ps.append(body); mount(ps);
+    // 手機：每年預設只顯示前兩件（一行一件）；桌機：每年只顯示一排，量出「一件作品的高度」，換行超過一排就收起來
+    requestAnimationFrame(() => {
+      const narrow = document.body.classList.contains("narrow");
+      body.querySelectorAll(".d-row").forEach(row => {
+        let needsMore;
+        if(narrow){ needsMore = row.children.length > 2; if(needsMore) row.classList.add("clamped"); }
+        else { const oneH = row.firstElementChild && row.firstElementChild.offsetHeight; needsMore = oneH && row.scrollHeight > oneH + 4; if(needsMore) row.style.maxHeight = oneH + "px"; }
+        if(needsMore){
+          const more = el("button", "d-more"); more.setAttribute("aria-label", "更多");
+          const mi = new Image(); mi.alt = "更多"; mi.draggable = false; mi.onerror = () => { more.classList.add("fb"); more.textContent = "更多"; }; mi.src = "assets/04-design/more-button.png"; more.append(mi);
+          more.onclick = () => { row.classList.add("open"); row.classList.remove("clamped"); row.style.maxHeight = ""; row.style.paddingRight = ""; more.remove(); };
+          if(!narrow){
+            const oneH = row.firstElementChild.offsetHeight;
+            // 在第一排右側預留「更多」鍵的寬度，會蓋到的作品自然被 flex-wrap 推到下一行（收起來看不到），不會疊在作品上
+            const uPx = parseFloat(getComputedStyle($("scroller")).getPropertyValue("--u")) || 0;
+            row.style.paddingRight = (uPx * (16.28 + 2)) + "px";
+            row.style.maxHeight = oneH + "px";
+            more.style.top = (row.offsetTop + oneH / 2) + "px"; more.style.transform = "translateY(-50%)";
+          }
+          row.parentElement.append(more);
+        }
+      });
+      ps.style.minHeight = (body.offsetTop + body.offsetHeight + innerHeight * .5) + "px";
+    });
+  },
+};
+RENDER.newsletter = function(){
+  const a = A.newsletter, nl = SITE.newsletter || {}, issues = SITE.issues || [], ps = shell(a); newsletterForm = nl.form || "";
+  const ov = el("div", "n-overview");
+  if(nl.blocks && nl.blocks.length) ov.append(renderBlocks(nl.blocks)); else ov.append(el("p", "", "電子報概述：（待補上，寫在 assets/06-newsletter/newsletter.md）"));
+  const line = el("div", "n-line"); line.style.setProperty("--line", a.frame ? a.frame[0] : "#19f0ff");
+  ps.append(ov, line);
+  let listEl;
+  if(!issues.length){ listEl = el("div", "n-empty"); listEl.innerHTML = "（篇名）<br>（篇名）<br><br>往期電子報放進 assets/06-newsletter/ 就會出現在這裡"; }
+  else {
+    listEl = el("div", "n-list");
+    issues.forEach(w => { const b = el("button", "n-item"); b.append(el("span", "t", w.title), document.createElement("br"), el("span", "m", w.date || ""));
+      b.onclick = () => w.url ? window.open(w.url, "_blank", "noopener") : issueDetail(w); listEl.append(b); });
+  }
+  ps.append(listEl);
+  // 概述文字可能是一行也可能是好幾行，量出它實際渲染的底部，線和文章列表都往下排在它底下（一定留一段固定間距，不會疊在一起）
+  requestAnimationFrame(() => { const gap = U(3); const y = ov.offsetTop + ov.offsetHeight;
+    line.style.top = `calc(${y}px + ${gap})`; listEl.style.top = `calc(${y}px + ${gap} + ${U(4)})`; });
+  const sp = a.subPos, sub = el("button", "n-sub"); sub.setAttribute("aria-label", "訂閱電子報"); sub.style.cssText = `left:${U(sp.l)}; top:${U(sp.t)}; width:${U(sp.w)}`;
+  const si = new Image(); si.alt = "訂閱"; si.draggable = false; si.onerror = () => { sub.classList.add("fb"); sub.textContent = nl.subscribeLabel || "訂閱"; }; si.src = "assets/06-newsletter/subscribe-button.png"; sub.append(si);
+  sub.onclick = openModal;
+  const kp = a.sealPos, seal = el("div", "n-seal"); seal.style.cssText = `left:${U(kp.l)}; top:${U(kp.t)}; width:${U(kp.w)}`;
+  const si2 = new Image(); si2.alt = ""; si2.draggable = false; si2.onerror = () => seal.remove(); si2.src = "assets/06-newsletter/deco-seal.png"; seal.append(si2);
+  const heart = el("div", "n-heart"); const hi = new Image(); hi.alt = ""; hi.draggable = false; hi.src = "assets/06-newsletter/blue-heart.png"; heart.append(hi);
+  heart.style.cssText = `left:${U(kp.l + kp.w * .78)}; top:${U(kp.t + kp.w * .06)}`;   // 海豹頭部右邊
+  ps.append(sub, seal, heart); mount(ps);
+};function issueDetail(w){
+  const a = A.newsletter, ps = shell(a, RENDER.newsletter), body = el("div", "pbody"), box = el("div", "sticker"); box.style.maxWidth = "72ch"; box.append(renderBlocks(w.blocks || []));
+  body.append(el("h2", "", w.title), el("p", "", w.date || ""), box); ps.append(body); mount(ps);
+}
+
+/* ---- 單一作品：封面放大、標題（B）、說明（EL）、其他圖片依序往下（各自留說明空間）、左右可切換作品 ---- */
+function clearDesignNav(){ document.querySelectorAll(".d-nav").forEach(n => n.remove()); }
+function designDetail(w){
+  clearDesignNav();
+  const a = A.design, order = SITE.design || [], ps = shell(a, () => fadeSwap(RENDER.design), { noTitle:true });
+  const accentLine = el("div", "d-accent"); accentLine.style.cssText = `left:50%; top:${U(11)}; width:${U(16)}; transform:translateX(-50%);`; accentLine.style.setProperty("--line", a.frame ? a.frame[0] : "#ff3dea"); ps.append(accentLine);
+
+  const body = el("div", "pbody"); body.style.top = U(17);
+  const cw = el("div", "d-cover-wrap"), cover = new Image(); cover.className = "d-cover"; cover.alt = w.title; if(w.cover) cover.src = w.cover; cw.append(cover);
+  body.append(cw, el("div", "d-title", w.title));
+
+  const descBlocks = [], galleryBlocks = []; let inGallery = false;
+  (w.description || []).forEach(b => { if(b.type === "img") inGallery = true; (inGallery ? galleryBlocks : descBlocks).push(b); });
+  if(descBlocks.length){ const d = el("div", "d-desc"); d.append(renderBlocks(descBlocks)); body.append(d); }
+
+  // 說明文字裡沒有用 ![]() 插入圖片的話，就把資料夾裡「封面以外」的圖片依檔名順序自動當成細節圖片（圖說留空，之後想加圖說再用 ![圖說](檔名) 那個寫法取代）
+  if(!galleryBlocks.length && w.images && w.images.length){ w.images.forEach(u => galleryBlocks.push({ type:"img", src:u, alt:"" })); }
+
+  if(galleryBlocks.length){
+    const gal = el("div", "d-gallery");
+    galleryBlocks.forEach(b => {
+      if(b.type === "img"){ const gi = el("div", "d-gitem"), im = new Image(); im.src = b.src; im.loading = "lazy"; im.alt = b.alt || ""; gi.append(im, el("div", "cap", b.alt || "")); gal.append(gi); }
+      else if(b.type === "h") gal.append(el("h3", "", b.text));
+      else gal.append(el("p", "", b.text));
+    });
+    body.append(gal);
+  }
+  ps.append(body); mount(ps);
+  requestAnimationFrame(() => { ps.style.minHeight = (body.offsetTop + body.offsetHeight + innerHeight * .4) + "px"; });
+
+  const i = order.findIndex(x => x.slug === w.slug), n = order.length;
+  if(n > 1){
+    const mk = (cls, src, target) => { const b = el("button", "d-nav " + cls); b.setAttribute("aria-label", cls === "l" ? "上一件作品" : "下一件作品");
+      const im = new Image(); im.alt = ""; im.draggable = false; im.onerror = () => { b.classList.add("fb"); b.textContent = cls === "l" ? "‹" : "›"; }; im.src = src;
+      b.append(im); b.onclick = () => fadeSwap(() => designDetail(target)); document.body.append(b); return b; };
+    mk("l", "assets/04-design/left-button.png", order[(i - 1 + n) % n]);
+    mk("r", "assets/04-design/right-button.png", order[(i + 1) % n]);
+  }
+}
+function writingDetail(w){
+  const a = A.writing, ps = shell(a, RENDER.writing), d = el("div", "w-detail");
+  d.append(el("h2", "", w.title), el("div", "meta", [w.date, w.source].filter(Boolean).join("　·　")), renderBlocks(w.blocks || []));
+  ps.append(d); mount(ps);
+}
+</script>
+</body>
+</html>
